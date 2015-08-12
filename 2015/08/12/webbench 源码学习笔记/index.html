@@ -1,0 +1,259 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>webbench 源码学习笔记 | ByTree 的程序世界</title>
+  <meta name="author" content="John Doe">
+  
+  <meta name="description" content="前段时间陆陆续续看了一些开源项目的代码，但是一段时间后回顾发现只记得一些大概，很多细节都已经忘记，于是决定将看过的项目都整理一下，提取出其中的知识点，既加深了理解，也方便以后查阅。">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="webbench 源码学习笔记"/>
+  <meta property="og:site_name" content="ByTree 的程序世界"/>
+
+  
+    <meta property="og:image" content="undefined"/>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="ByTree 的程序世界" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">ByTree 的程序世界</a></h1>
+  <h2><a href="/"></a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+      <li><a href="/about">About</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div></header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2015-08-12T05:24:32.000Z"><a href="/2015/08/12/webbench 源码学习笔记/">2015-08-12</a></time>
+      
+      
+  
+    <h1 class="title">webbench 源码学习笔记</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>前段时间陆陆续续看了一些开源项目的代码，但是一段时间后回顾发现只记得一些大概，很多细节都已经忘记，于是决定将看过的项目都整理一下，提取出其中的知识点，既加深了理解，也方便以后查阅。</p>
+<a id="more"></a>
+<p><a href="http://home.tiscali.cz/~cz210552/webbench.html" target="_blank" rel="external">webbench</a> 是一个 C 语言写的网站压力测试的工具。整个代码的逻辑很简单。基本实现流程是：<br>1.解析命令参数；<br>2.构造 request 请求；<br>3.使用 fork 产生子进程，创建由子进程到父进程的管道；<br>4.子进程设定过期时间，通过socket连接，开始请求url；<br>5.过期时间到后子进程接收到退出信号停止请求，将数据通过管道传给父进程后退出；<br>6.父进程等所有子进程退出后退出；</p>
+<p>其中有两个关键的地方：</p>
+<h3 id="一-使用_fork_产生子进程并创建管道用于父子进程通信">一.使用 fork 产生子进程并创建管道用于父子进程通信</h3><pre><code>FIFE *f;
+<span class="keyword">pid_t</span> pid;
+pid = fork();
+<span class="keyword">if</span>(pid == ((<span class="keyword">pid_t</span>) <span class="number">0</span>) {
+    <span class="comment">//子进程为写端</span>
+    f = fdopen(mypipe[<span class="number">1</span>], “w”);
+} <span class="keyword">else</span> {
+    <span class="comment">//父进程为读端</span>
+    f = fdopen(mypipe[<span class="number">0</span>], “r”);
+}
+</code></pre><p>之后子进程变可以 <code>fprintf(f, “%s”, “xxx”)</code>，父进程通过 <code>fscanf(f,”%s”,&amp;str)</code> 将信息读到 str 中。注意这里多个子进程共同写管道，而父进程通过这一个管道读取各个子进程的信息。</p>
+<h3 id="二-子进程设定过期时间">二.子进程设定过期时间</h3><pre><code><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">alarm_handler</span><span class="params">(<span class="keyword">int</span> signal)</span>
+
+<span class="keyword">struct</span> sigaction sa</span>;
+sa.sa_handler=alarm_handler;
+sa.sa_flags=<span class="number">0</span>;
+<span class="keyword">if</span>(sigaction(SIGALRM,&amp;sa,<span class="literal">NULL</span>))
+    <span class="built_in">exit</span>(<span class="number">3</span>);
+alarm(benchtime);
+</code></pre><p><code>sigaction()</code> 的作用是改变一个系统对于一个某种信号的产生 动作，将信号处理函数自定义为 <code>sa.sa_handler</code>。<br>SIGALRM 是终止进程的信号，而 <code>alarm()</code> 将设定一个定时器，在设定时间之后传递一个 SIGALRM 信号，给调用 <code>alarm()</code> 的进程。<br>当 benchtime 时间后，alarm_handler 被执行。</p>
+<p>其他知识点：</p>
+<h3 id="一-命令行参数解析">一.命令行参数解析</h3><p>涉及到的函数与变量</p>
+<pre><code><span class="function"><span class="keyword">int</span> <span class="title">getopt</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> * <span class="keyword">const</span> argv[], <span class="keyword">const</span> <span class="keyword">char</span> *optstring)</span></span>;
+<span class="function"><span class="keyword">int</span> <span class="title">getopt_long</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> * <span class="keyword">const</span> argv[],
+           <span class="keyword">const</span> <span class="keyword">char</span> *optstring,
+           <span class="keyword">const</span> <span class="keyword">struct</span> option *longopts, <span class="keyword">int</span> *longindex)</span></span>;
+<span class="function"><span class="keyword">int</span> <span class="title">getopt_long_only</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> * <span class="keyword">const</span> argv[],
+           <span class="keyword">const</span> <span class="keyword">char</span> *optstring,
+           <span class="keyword">const</span> <span class="keyword">struct</span> option *longopts, <span class="keyword">int</span> *longindex)</span></span>;
+
+optarg, optind, opterr, optopt
+</code></pre><p>搞懂了上面3个函数和4个变量的含义和用法就ok了。</p>
+<p>1.getopt 函数</p>
+<p>函数接受三个参数，其中 <code>char *optstring</code> 是选择字符的字符串, 如 “ts:0”, 表示 t, s ,0 都是作为选择字符，字符后加冒号表示该选择字符后需要接参数，我们可以这样使用：<br>    <code>program -t -s xxx -0</code><br>多次调用 getopt, 会依次返回命令行中中的选择字符。<br>extern char *optarg, 当前选择字符后带参数时，指向该参数, 没有参数时为空。<br>extern int optopt, 当getopt 不识别输入的选择字符时，会将该字符存在 optopt 位置，并返回 ‘?’。<br>extern int optind 表示下一个被处理的选择字符在 argv 中的下标。<br>extern int opterr 默认设为非 0，有错误时输出错误信息到 stderr。设为 0 时不输出错误信息。<br>看一个具体的例子</p>
+<pre><code><span class="preprocessor">#<span class="keyword">include</span><span class="string">&lt;stdio.h&gt;</span></span>
+<span class="preprocessor">#<span class="keyword">include</span><span class="string">&lt;getopt.h&gt;</span></span>
+
+<span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> *argv[])</span> </span>{
+    <span class="keyword">int</span> opt = <span class="number">0</span>;
+    <span class="keyword">while</span>((opt = getopt(argc, argv, <span class="string">"t:s0"</span>)) != EOF) {
+        <span class="built_in">printf</span>(<span class="string">"opt:%c, optarg:%s, optind:%d, optopt:%c\n"</span>, opt, optarg, optind, optopt);
+    }   
+    <span class="keyword">return</span> <span class="number">0</span>;
+}
+</code></pre><p>执行 <code>./test -t 10 -s -y</code><br>输出</p>
+<pre><code><span class="string">opt:</span>t, <span class="string">optarg:</span><span class="number">10</span>, <span class="string">optind:</span><span class="number">3</span>, <span class="string">optopt:</span>t
+<span class="string">opt:</span>s, <span class="string">optarg:</span>(<span class="literal">null</span>), <span class="string">optind:</span><span class="number">4</span>, <span class="string">optopt:</span>s
+./<span class="string">test:</span> illegal option -- y
+<span class="string">opt:</span>?, optarg:(<span class="literal">null</span>), <span class="string">optind:</span><span class="number">5</span>, <span class="string">optopt:</span>y
+</code></pre><p>2.getopt_long 函数</p>
+<pre><code><span class="function"><span class="keyword">int</span> <span class="title">getopt_long</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> * <span class="keyword">const</span> argv[],
+           <span class="keyword">const</span> <span class="keyword">char</span> *optstring,
+           <span class="keyword">const</span> <span class="keyword">struct</span> option *longopts, <span class="keyword">int</span> *longindex)</span></span>;
+</code></pre><p>option 结构体的原型是：</p>
+<pre><code><span class="keyword">struct</span> option {
+    <span class="keyword">const</span> <span class="keyword">char</span> *name;      <span class="comment">//其中 name 是选项的全名</span>
+    <span class="keyword">int</span>         has_arg;   <span class="comment">//三个可选值：no_argument（0）没有参数; required_argument（1）有参数; optional_argument（2）可有可无</span>
+    <span class="keyword">int</span>        *flag;      <span class="comment">//flag 是若为 NULL, 则 getopt_long 返回 val，否则返回0，并且 flag 为 val 的一个引用</span>
+    <span class="keyword">int</span>         val;        
+};
+</code></pre><p>以 webbench 中的为例：</p>
+<pre><code><span class="keyword">static</span> <span class="keyword">const</span> <span class="keyword">struct</span> option long_options[]=
+{
+ {<span class="string">"force"</span>,no_argument,&amp;force,<span class="number">1</span>},
+ {<span class="string">"reload"</span>,no_argument,&amp;force_reload,<span class="number">1</span>},
+ {<span class="string">"time"</span>,required_argument,<span class="literal">NULL</span>,<span class="string">'t'</span>},
+ {<span class="string">"help"</span>,no_argument,<span class="literal">NULL</span>,<span class="string">'?'</span>},
+ {<span class="string">"http09"</span>,no_argument,<span class="literal">NULL</span>,<span class="string">'9'</span>},
+ {<span class="string">"http10"</span>,no_argument,<span class="literal">NULL</span>,<span class="string">'1'</span>},
+ {<span class="string">"http11"</span>,no_argument,<span class="literal">NULL</span>,<span class="string">'2'</span>},
+ {<span class="string">"get"</span>,no_argument,&amp;method,METHOD_GET},
+ {<span class="string">"head"</span>,no_argument,&amp;method,METHOD_HEAD},
+ {<span class="string">"options"</span>,no_argument,&amp;method,METHOD_OPTIONS},
+ {<span class="string">"trace"</span>,no_argument,&amp;method,METHOD_TRACE},
+ {<span class="string">"version"</span>,no_argument,<span class="literal">NULL</span>,<span class="string">'V'</span>},
+ {<span class="string">"proxy"</span>,required_argument,<span class="literal">NULL</span>,<span class="string">'p'</span>},
+ {<span class="string">"clients"</span>,required_argument,<span class="literal">NULL</span>,<span class="string">'c'</span>},
+ {<span class="literal">NULL</span>,<span class="number">0</span>,<span class="literal">NULL</span>,<span class="number">0</span>}
+};
+
+<span class="keyword">while</span>((opt=getopt_long(argc,argv,<span class="string">"912Vfrt:p:c:?h"</span>,long_options,&amp;options_index))!=EOF )
+{
+       <span class="keyword">switch</span>(opt)
+       {
+           <span class="keyword">case</span>  <span class="number">0</span> : <span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'f'</span>: force=<span class="number">1</span>;<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'r'</span>: force_reload=<span class="number">1</span>;<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'9'</span>: http10=<span class="number">0</span>;<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'1'</span>: http10=<span class="number">1</span>;<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'2'</span>: http10=<span class="number">2</span>;<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'V'</span>: <span class="built_in">printf</span>(PROGRAM_VERSION<span class="string">"\n"</span>);<span class="built_in">exit</span>(<span class="number">0</span>);
+           <span class="keyword">case</span> <span class="string">'t'</span>: benchtime=atoi(optarg);<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'p'</span>:
+           <span class="keyword">case</span> <span class="string">':'</span>:
+           <span class="keyword">case</span> <span class="string">'h'</span>:
+           <span class="keyword">case</span> <span class="string">'?'</span>: usage();<span class="keyword">return</span> <span class="number">2</span>;<span class="keyword">break</span>;
+           <span class="keyword">case</span> <span class="string">'c'</span>: clients=atoi(optarg);<span class="keyword">break</span>;
+       }
+}
+</code></pre><p>使用: <code>program -t 10</code>（缩写用一个横杆） 或 <code>program –time 10</code>（全名两个横杆）</p>
+<p>3.getopt_long_only 函数<br>与 getopt_long 类似，但支持 <code>program -time 10</code>(一个横杆)</p>
+<p>更具体的分析我都写在代码注释里 <a href="https://github.com/chenshuchao/SourceCode.git" target="_blank" rel="external">@source</a></p>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+
+<!-- Duoshuo Comment BEGIN -->
+  <div class="ds-thread"></div>
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"shuchao"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+  </script>
+<!-- Duoshuo Comment END -->  
+
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="搜索">
+    <input type="hidden" name="q" value="site:shuchao.me">
+  </form>
+</div>
+
+  
+
+  
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2015 John Doe
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>
