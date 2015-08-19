@@ -3,15 +3,17 @@
 <head>
   <meta charset="utf-8">
   
-  <title>一个 python 小爬虫 | ByTree 的程序世界</title>
+  <title>C 语言开发的语音传输项目 | ByTree 的程序世界</title>
   <meta name="author" content="John Doe">
   
-  <meta name="description" content="上学期学校羽协活动报名贴总是在周一发出来，但具体时间不定，所以一天总是要不断刷论坛抢报名，很麻烦。所以想到写一个 python 爬虫帮我监控一下，发现报名贴便给我发邮件提醒。  因为代码比较简单就不具体分析了，详细可见我的 GitHub。">
+  <meta name="description" content="总体思路：发送端：用两个线程，一个从声卡获取声音信息，写入缓存；另一个从缓存读取信息发送。接收端：相反的过程，也用两个线程，一个接收信息并写入缓存，另一个从缓存读取信息并写入声卡。
+主要涉及的技术点：Alsa 声卡读写，缓存结构设计，线程同步，UDP 网络传输。我们主要看下面两个方面：
+缓存结构的实现缓存结构采用链表，每个结点是一个数据块，每次从声卡读取到一个数据块后插入链表尾部(指针 writeIndex)。读取时，从头部(指针 readIndex)开始读取数据，读完销毁这个结点。">
   
   
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
-  <meta property="og:title" content="一个 python 小爬虫"/>
+  <meta property="og:title" content="C 语言开发的语音传输项目"/>
   <meta property="og:site_name" content="ByTree 的程序世界"/>
 
   
@@ -52,17 +54,26 @@
     <header>
       
         <div class="icon"></div>
-        <time datetime="2015-02-26T15:02:01.000Z"><a href="/2015/02/26/一个 python 小爬虫/">2015-02-26</a></time>
+        <time datetime="2015-08-19T12:57:10.000Z"><a href="/2015/08/19/C 语言开发的语音传输项目/">2015-08-19</a></time>
       
       
   
-    <h1 class="title">一个 python 小爬虫</h1>
+    <h1 class="title">C 语言开发的语音传输项目</h1>
   
 
     </header>
     <div class="entry">
       
-        <p>  上学期学校羽协活动报名贴总是在周一发出来，但具体时间不定，所以一天总是要不断刷论坛抢报名，很麻烦。所以想到写一个 python 爬虫帮我监控一下，发现报名贴便给我发邮件提醒。<br>  因为代码比较简单就不具体分析了，详细可见我的 <a href="https://github.com/chenshuchao/python/tree/master/spider" target="_blank" rel="external">GitHub</a>。</p>
+        <p>总体思路：<br>发送端：用两个线程，一个从声卡获取声音信息，写入缓存；另一个从缓存读取信息发送。<br>接收端：相反的过程，也用两个线程，一个接收信息并写入缓存，另一个从缓存读取信息并写入声卡。</p>
+<p>主要涉及的技术点：Alsa 声卡读写，缓存结构设计，线程同步，UDP 网络传输。<br>我们主要看下面两个方面：</p>
+<h3 id="缓存结构的实现">缓存结构的实现</h3><p>缓存结构采用链表，每个结点是一个数据块，每次从声卡读取到一个数据块后插入链表尾部(指针 writeIndex)。<br>读取时，从头部(指针 readIndex)开始读取数据，读完销毁这个结点。</p>
+<p><img src="http://7xiehz.com1.z0.glb.clouddn.com/B6C3469E.png" alt=""></p>
+<a id="more"></a>
+<h3 id="线程同步">线程同步</h3><p>刚开始没有考虑线程同步问题，所以埋下了一个小坑。<br>一开始考虑到只有两个线程对缓存进行读写，用两个指针，一个指向队头，另一个指向队尾，每次从对头读取，从队尾插入。这种情况下，当缓存结构多于一块时不会发生两个线程读写同一块内存问题，但是当只剩下一块时，问题产生了。此时 writeIndex， readIndex 指向同一块内存，前一个时钟时刻判断 writeIndex != NULL ,下一个时刻数据块被另一个读取线程后释放， 之后 writeIndex 便悬挂了，错误由此产生。</p>
+<p><img src="http://7xiehz.com1.z0.glb.clouddn.com/DB3D21F4.png" alt=""></p>
+<p>解决的方法有两个：<br>一个是每次读写内存时加锁, 也是我目前采用的办法，但是加锁会造成性能损失。<br>另一个就是从缓存结构设计上防止多个线程读取到同一块内存，具体可以看看淘宝搜索博客<a href="http://www.searchtb.com/2012/10/introduction_to_disruptor.html" target="_blank" rel="external">无锁队列</a>的实现。</p>
+<p>不足之处：<br>每次都申请释放，应该使用内存池.</p>
+<p>具体代码放在我的 <a href="https://github.com/chenshuchao/c_chat" target="_blank" rel="external">GitHub</a>。</p>
 
       
     </div>
@@ -72,7 +83,7 @@
         
   
   <div class="tags">
-    <a href="/tags/Python/">Python</a>
+    <a href="/tags/C-C/">C/C++</a>
   </div>
 
         

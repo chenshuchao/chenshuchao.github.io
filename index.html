@@ -51,6 +51,45 @@
     <header>
       
         <div class="icon"></div>
+        <time datetime="2015-08-19T12:57:10.000Z"><a href="/2015/08/19/C 语言开发的语音传输项目/">2015-08-19</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2015/08/19/C 语言开发的语音传输项目/">C 语言开发的语音传输项目</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>总体思路：<br>发送端：用两个线程，一个从声卡获取声音信息，写入缓存；另一个从缓存读取信息发送。<br>接收端：相反的过程，也用两个线程，一个接收信息并写入缓存，另一个从缓存读取信息并写入声卡。</p>
+<p>主要涉及的技术点：Alsa 声卡读写，缓存结构设计，线程同步，UDP 网络传输。<br>我们主要看下面两个方面：</p>
+<h3 id="缓存结构的实现">缓存结构的实现</h3><p>缓存结构采用链表，每个结点是一个数据块，每次从声卡读取到一个数据块后插入链表尾部(指针 writeIndex)。<br>读取时，从头部(指针 readIndex)开始读取数据，读完销毁这个结点。</p>
+<p><img src="http://7xiehz.com1.z0.glb.clouddn.com/B6C3469E.png" alt=""></p>
+      
+    </div>
+    <footer>
+      
+        
+          <div class="alignleft">
+            <a href="/2015/08/19/C 语言开发的语音传输项目/#more" class="more-link">Read More</a>
+          </div>
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
         <time datetime="2015-08-12T05:24:32.000Z"><a href="/2015/08/12/webbench 源码学习笔记/">2015-08-12</a></time>
       
       
@@ -204,6 +243,19 @@
   
 
   
+<div class="widget tag">
+  <h3 class="title">标签</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/C-C/">C/C++</a><small>2</small></li>
+  
+    <li><a href="/tags/Python/">Python</a><small>1</small></li>
+  
+    <li><a href="/tags/其他/">其他</a><small>1</small></li>
+  
+  </ul>
+</div>
+
 </aside>
     <div class="clearfix"></div>
   </div>
