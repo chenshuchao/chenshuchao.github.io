@@ -1,0 +1,353 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>I/O复用——select,poll,epoll | Bytree的程序世界</title>
+  <meta name="author" content="Bytree">
+  
+  <meta name="description" content="程序中我们经常会出现需要监听多个文件描述符的情况，比如在一个聊天程序中我们需要同时监听键盘输入事件以及socket连接是否可读。一个简单的做法是开两个线程，一个负责监听键盘输入，另一个监听socket。但是这种做法一次只监听一个描述符，比较消耗系统资源，Linux 中系统给我们提供了一种更好的方案——I/O复用。
+I/O复用使得程序可以同时监听多个描述符，极大地提高了程序性能。它主要有下面几种：select，poll，epoll。">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="I/O复用——select,poll,epoll"/>
+  <meta property="og:site_name" content="Bytree的程序世界"/>
+
+  
+    <meta property="og:image" content="undefined"/>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="Bytree的程序世界" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">Bytree的程序世界</a></h1>
+  <h2><a href="/">努力的日子里总会有好事情发生</a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+      <li><a href="/about">About</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div></header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2015-11-29T14:34:00.000Z"><a href="/2015/11/29/IO复用/">2015-11-29</a></time>
+      
+      
+  
+    <h1 class="title">I/O复用——select,poll,epoll</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>程序中我们经常会出现需要监听多个文件描述符的情况，比如在一个聊天程序中我们需要同时监听键盘输入事件以及socket连接是否可读。一个简单的做法是开两个线程，一个负责监听键盘输入，另一个监听socket。但是这种做法一次只监听一个描述符，比较消耗系统资源，Linux 中系统给我们提供了一种更好的方案——I/O复用。</p>
+<p>I/O复用使得程序可以同时监听多个描述符，极大地提高了程序性能。它主要有下面几种：select，poll，epoll。</p>
+<a id="more"></a>
+<h2 id="select">select</h2><p>先来看看 select 的 API:</p>
+<pre><code><span class="function"><span class="keyword">int</span> <span class="title">select</span><span class="params">(<span class="keyword">int</span> maxfdp1, fd_set *readset, fd_set *writeset, fd_set *exceptset, <span class="keyword">const</span> <span class="keyword">struct</span> timeval *timeout)</span></span>;
+</code></pre><ol>
+<li>参数<br>maxfdp1：指的是指定待测试的最大描述符加一，即从描述符 0,1,2,…,maxfdp1-1 都将被检测。</li>
+</ol>
+<p>readset，writeset，exceptset：分别指向可读，可写，异常事件的描述符集合。我们通过这三个参数设置我们所关心的描述符及其对应的事件。当 select 调用返回时，描述符集内任何未就绪的描述符对应的位将被清 0，我们通过检查这几个被修改集合得知描述符的状态。同时每次调用 select 之前要记得重置一下描述符集合。</p>
+<p>对 fd_set 结构体操作的函数有：</p>
+<pre><code>FD_ZERO(fd_set *fdset);              <span class="comment">// 清除 fdset 所有位</span>
+FD_SET(<span class="keyword">int</span> fd, fd_set *fdset);       <span class="comment">// 设置 fdset 的位 fd</span>
+FD_CLR(<span class="keyword">int</span> fd, fd_set *fdset);       <span class="comment">// 清除 fdset 的位 fd</span>
+<span class="function"><span class="keyword">int</span> <span class="title">FD_ISSET</span><span class="params">(<span class="keyword">int</span> fd, fd_set *fdset)</span></span>; <span class="comment">// 测试 fdset 是否设置了 fd 位， select 调用后我们通过 FD_ISSET 检查某个 fd，如果返回 1 则说明该 fd 事件就绪。</span>
+</code></pre><p>timeout：为 select 调用指定超时时间。结构为：</p>
+<pre><code><span class="keyword">struct</span> timeval
+{
+  <span class="keyword">long</span> tv_sec;  <span class="comment">// 秒数</span>
+  <span class="keyword">long</span> tv_usec; <span class="comment">// 微秒数</span>
+};
+</code></pre><p>当两项都为 0 时，调用立即返回，当 timeout 参数为 NULL 时调用将阻塞至某个描述符就绪。</p>
+<ol>
+<li><p>返回值<br>成功时返回已就绪描述符的总数，超时时间内没有就绪描述符返回 0，失败返回 -1。</p>
+</li>
+<li><p>例子</p>
+</li>
+</ol>
+<p>比如要对描述符 sockfd1，sockfd2 进行读事件进行监听：</p>
+<pre><code>int maxfdp1;
+fd_set rset;     <span class="comment">// fd 集合，这里用作读事件集合</span>
+FD_ZERO<span class="params">(&amp;rset)</span>;  
+FD_SET<span class="params">(sockfd1, &amp;rset)</span>;
+FD_SET<span class="params">(sockfd2, &amp;rset)</span>;
+maxfdp1 = <span class="built_in">max</span><span class="params">(sockfd1, sockfd2)</span> + <span class="number">1</span>;  <span class="comment">// 最大描述符加 1</span>
+select<span class="params">(maxfdp1, &amp;rset, NULL, NULL, NULL)</span>;
+
+<span class="keyword">if</span> <span class="params">(FD_ISSET<span class="params">(sockfd1, &amp;rset)</span>)</span>
+{   
+  <span class="comment">// sockfd1 可读</span>
+  ...
+}
+<span class="keyword">if</span> <span class="params">(FD_ISSET<span class="params">(sockfd2, &amp;rset)</span>)</span>
+{
+  <span class="comment">// sockfd2 可读</span>
+  ...
+}
+</code></pre><p>这里有<a href="https://github.com/chenshuchao/practice/tree/master/os/io_multiple/select" target="_blank" rel="external">完整例子</a>，有兴趣的同学可以跑一跑。</p>
+<h2 id="poll">poll</h2><p>poll 的 API 如下：</p>
+<pre><code><span class="function"><span class="keyword">int</span> <span class="title">poll</span><span class="params">(<span class="keyword">struct</span> pollfd* fdarray, nfds_t nfds, <span class="keyword">int</span> timeout)</span></span>;
+</code></pre><ol>
+<li>参数</li>
+</ol>
+<p>fdarray：每个元素是一个 pollfd 结构。</p>
+<pre><code><span class="keyword">struct</span> pollfd {
+  <span class="keyword">int</span> fd;        <span class="comment">// 要检查的描述符</span>
+  <span class="keyword">short</span> events;  <span class="comment">// 关心的事件</span>
+  <span class="keyword">short</span> revents; <span class="comment">// 真正发生的事件</span>
+}；
+</code></pre><p>我们通过就是通过设置这些元素来向系统注册我们关心的描述符及其对应事件，并且当调用返回时通过这些元素来获知描述符就绪情况。</p>
+<p>nfds_t：及 fdarray 的元素个数，其实类型就是 unsigned long int。</p>
+<p>timeout：poll 调用超时值，单位毫秒。值为 -1 时 poll 阻塞至有描述符就绪，值为 0 时调用立即返回。</p>
+<ol>
+<li><p>返回值<br>同 select。</p>
+</li>
+<li><p>例子</p>
+</li>
+</ol>
+<p>比如还是对描述符 sockfd1，sockfd2 进行读事件进行监听：</p>
+<pre><code><span class="keyword">struct</span> pollfd fds[<span class="number">2</span>];
+fds[<span class="number">0</span>].fd = sockfd1;
+fds[<span class="number">0</span>].events = POLLIN;
+fds[<span class="number">1</span>].fd = sockfd2;
+fds[<span class="number">1</span>].events = POLLIN;
+
+<span class="keyword">int</span> timeoutMs = <span class="number">10000</span>;   <span class="comment">// 超时事件设为 10s</span>
+<span class="keyword">int</span> len = <span class="keyword">sizeof</span>(fds) / <span class="keyword">sizeof</span>(fds[<span class="number">0</span>]);  <span class="comment">// fds 元素个数</span>
+<span class="keyword">for</span> ( ; ; ) {
+    poll(fds, len, timeoutMs);
+    <span class="keyword">if</span> (fds[<span class="number">0</span>].revents == POLLIN)
+    {
+      <span class="comment">// sockfd1 可读</span>
+      ...
+    }
+    <span class="keyword">if</span> (fds[<span class="number">1</span>].revents == POLLIN)
+    {
+      <span class="comment">// sockfd2 可读</span>
+      ...
+    }
+}
+</code></pre><p><a href="https://github.com/chenshuchao/practice/tree/master/os/io_multiple/poll" target="_blank" rel="external">完整例子</a></p>
+<h2 id="epoll">epoll</h2><p>Linux 系统特有的I/O复用，与 select，poll 不同，epoll 把用户关心的文件描述符事件放到内核的一个事件表里，使用一组函数来完成任务：</p>
+<pre><code><span class="function"><span class="keyword">int</span> <span class="title">epoll_create</span><span class="params">(<span class="keyword">int</span> size)</span></span>;
+</code></pre><ol>
+<li><p>参数<br>size：提示内核事件表的大小。</p>
+</li>
+<li><p>返回值<br>一个文件描述符，标识这这个 epoll 调用。</p>
+<p> int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);</p>
+</li>
+<li><p>参数</p>
+</li>
+</ol>
+<p>epfd：epoll_create 返回值。</p>
+<p>op：操作类型</p>
+<pre><code>EPOLL_CTL_ADD <span class="comment">// 注册 fd 上事件</span>
+EPOLL_CTL_MOD <span class="comment">// 修改 fd 上的注册事件</span>
+EPOLL_CTL_DEL <span class="comment">// 删除 fd 上的注册事件</span>
+</code></pre><p>fd：要注册的描述符</p>
+<p>event：描述符事件数组，每个元素指定描述符事件，其结构为：</p>
+<pre><code><span class="keyword">struct</span> epoll_event
+{
+  <span class="keyword">__unit32_t</span> events; <span class="comment">// epoll 事件</span>
+  <span class="keyword">epoll_data_t</span> data; <span class="comment">// 用户数据</span>
+};
+<span class="keyword">typedef</span> <span class="keyword">union</span> epoll_data
+{
+  <span class="keyword">int</span> fd;
+  ...
+} <span class="keyword">epoll_data_t</span>;
+</code></pre><ol>
+<li><p>返回值<br>成功返回 0， 失败返回 -1 并设置 errno。</p>
+<p>int epoll_wait(int epfd, struct epll_event *events, int maxevents, int timeout);</p>
+</li>
+</ol>
+<ol>
+<li>参数</li>
+</ol>
+<p>epfd：epoll_create 返回值。</p>
+<p>events：<code>epoll_wait</code> 调用后检测到描述符就绪就从内核事件表里复制该描述符事件复制到 events 数组中。 由于 <code>epoll_event</code> 结构中含有事件和描述符信息，所以我们通过这个 events 数组即可知道描述符事件的情况。</p>
+<p>maxevents：最大监听事件数。</p>
+<p>timeout：调用超时时间。</p>
+<ol>
+<li>返回值<br>就绪描述符事件数目。</li>
+</ol>
+<p>比如还是对描述符 sockfd1，sockfd2 进行读事件进行监听：</p>
+<pre><code>int epollfd = epoll_create<span class="params">(EPOLL_CLOEXEC)</span>;
+<span class="comment">// 注册 sockfd1 读事件</span>
+struct epoll_event event1;
+event1.data.fd = sockfd1;
+event1.events = EPOLLIN;
+epoll_ctl<span class="params">(epollfd, EPOLL_CTL_ADD, sockfd1, &amp;event1)</span>;
+<span class="comment">// 注册 sockfd1 读事件</span>
+struct epoll_event event2;
+event2.data.fd = sockfd2;
+event2.events = EPOLLIN;
+epoll_ctl<span class="params">(epollfd, EPOLL_CTL_ADD, sockfd2, &amp;event2)</span>;
+
+struct epoll_event events[events_size];  <span class="comment">// 调用后就绪描述符事件数组</span>
+<span class="keyword">for</span> <span class="params">( ; ; )</span> {
+  int eventNums = epoll_wait<span class="params">(epollfd, events, events_size, timeoutMs)</span>;
+  int i;
+  <span class="keyword">for</span> <span class="params">(i = <span class="number">0</span>; i &lt; eventNums; i ++)</span>
+  {
+    <span class="keyword">if</span> <span class="params">(events[i].data.fd == sockfd1)</span>
+    {
+      <span class="comment">// sockfd1 可读</span>
+      ...
+    }
+    <span class="keyword">else</span> <span class="keyword">if</span> <span class="params">(events[i].data.fd == sockfd2)</span>
+    {
+      <span class="comment">// sockfd2 可读</span>
+      ...
+    }
+  }
+}
+</code></pre><p><a href="https://github.com/chenshuchao/practice/tree/master/os/io_multiple/epoll/echo" target="_blank" rel="external">完整例子</a></p>
+<p>###电平触发模式(LT)和边缘触发模式(ET)<br>epoll 事件触发还分为电平触发和边缘触发。</p>
+<p>####电平触发<br>描述符事件存在时 epoll_wait 能检测到。如果此时应用程序不处理事件，下次调用 epoll_wait 后仍能检测到该事件。默认是电平触发。</p>
+<p>####边缘触发<br>当描述符事件有变化时 epoll_wait 才能检测到。如果此时应用程序不处理事件，下次调用 epoll_wait 已经不能检测到该事件，因为这次调用时事件的状态没有变化。</p>
+<p>举个实例：<br>我们现在用 epoll 电平触发模式监听 sockfd1 读事件, 用边缘触发模式监听 sockfd2 读事件，假设程序每次只能读取 9 个字符数据。此时两个描述符变为有 10 个字符可读，那么对于电平触发，程序读取完 9 个字符后，如果进入下一次 epoll_wait 调用，因为其中还有 1 个字符未读，所以 sockfd1 的读事件时存在的，因此 epoll_wait 再一次检测到事件就绪，通知程序读完这 1 个字符。</p>
+<p>对于边缘触发，第一次 epoll_wait 调用时，由于来了 10 个字符，描述符事件从未就绪变为已就绪，epoll_wait 检测到了通知程序读完 9 个字符，然后进入下次 epoll_wait 调用，第二次调用时，由于事件已就绪，所以 epoll_wait 检测不到事件变化，因此不会返回。1 个字符因此不会被读取。</p>
+<p>所以对于电平触发，一个事件可能多次触发。对于边缘触发，一个事件只能触发一次，所以我们要及时处理完事件，否则就再也检测不到了。比如读取 10 个字符，我们应该在第一次 epoll_wait 调用返回后就循环读取直到读不到任何数据才停止。</p>
+<p><a href="https://github.com/chenshuchao/practice/tree/master/os/io_multiple/epoll/et_lt_compare" target="_blank" rel="external">完整例子</a></p>
+<h3 id="三者比较">三者比较</h3><ol>
+<li><p>select，poll 只有 LT 模式，epoll 有 LT 和 ET 模式。</p>
+</li>
+<li><p>检测原理上， select 和 poll 采用轮询，每次调用都查找整个描述符集合，并将其中就绪描述符事件返回用户，<br>而 epoll 采用回调方式，内核检测到就绪描述符时触发回调函数，将结果返回用户。</p>
+</li>
+</ol>
+<p>参考资料：<br><a href="http://book.douban.com/subject/24722611/" target="_blank" rel="external">《Linux高性能服务器编程》</a><br><a href="http://book.douban.com/subject/1500149/" target="_blank" rel="external">《UNIX网络编程卷1》</a></p>
+
+      
+    </div>
+    <footer>
+      
+        
+        
+  
+  <div class="tags">
+    <a href="/tags/网络编程/">网络编程</a>
+  </div>
+
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+
+<!-- Duoshuo Comment BEGIN -->
+  <div class="ds-thread"></div>
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"shuchao"};
+  (function() {
+    var ds = document.createElement('script');
+    ds.type = 'text/javascript';ds.async = true;
+    ds.src = 'http://static.duoshuo.com/embed.js';
+    ds.charset = 'UTF-8';
+    (document.getElementsByTagName('head')[0] 
+    || document.getElementsByTagName('body')[0]).appendChild(ds);
+  })();
+  </script>
+<!-- Duoshuo Comment END -->  
+
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="搜索">
+    <input type="hidden" name="q" value="site:shuchao.me">
+  </form>
+</div>
+
+  
+
+  
+<div class="widget tag">
+  <h3 class="title">标签</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/C-C/">C/C++</a><small>2</small></li>
+  
+    <li><a href="/tags/Python/">Python</a><small>1</small></li>
+  
+    <li><a href="/tags/其他/">其他</a><small>1</small></li>
+  
+    <li><a href="/tags/网络编程/">网络编程</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2015 Bytree
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>

@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8">
   
-  <title>ByTree 的程序世界</title>
-  <meta name="author" content="John Doe">
+  <title>Bytree的程序世界</title>
+  <meta name="author" content="Bytree">
   
   
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
   
-  <meta property="og:site_name" content="ByTree 的程序世界"/>
+  <meta property="og:site_name" content="Bytree的程序世界"/>
 
   
     <meta property="og:image" content="undefined"/>
   
 
   <link href="/favicon.png" rel="icon">
-  <link rel="alternate" href="/atom.xml" title="ByTree 的程序世界" type="application/atom+xml">
+  <link rel="alternate" href="/atom.xml" title="Bytree的程序世界" type="application/atom+xml">
   <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
   <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
   
@@ -27,8 +27,8 @@
 
 <body>
   <header id="header" class="inner"><div class="alignleft">
-  <h1><a href="/">ByTree 的程序世界</a></h1>
-  <h2><a href="/"></a></h2>
+  <h1><a href="/">Bytree的程序世界</a></h1>
+  <h2><a href="/">努力的日子里总会有好事情发生</a></h2>
 </div>
 <nav id="main-nav" class="alignright">
   <ul>
@@ -45,6 +45,43 @@
 <div class="clearfix"></div></header>
   <div id="content" class="inner">
     <div id="main-col" class="alignleft"><div id="wrapper">
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2015-11-29T14:34:00.000Z"><a href="/2015/11/29/IO复用/">2015-11-29</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2015/11/29/IO复用/">I/O复用——select,poll,epoll</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>程序中我们经常会出现需要监听多个文件描述符的情况，比如在一个聊天程序中我们需要同时监听键盘输入事件以及socket连接是否可读。一个简单的做法是开两个线程，一个负责监听键盘输入，另一个监听socket。但是这种做法一次只监听一个描述符，比较消耗系统资源，Linux 中系统给我们提供了一种更好的方案——I/O复用。</p>
+<p>I/O复用使得程序可以同时监听多个描述符，极大地提高了程序性能。它主要有下面几种：select，poll，epoll。</p>
+      
+    </div>
+    <footer>
+      
+        
+          <div class="alignleft">
+            <a href="/2015/11/29/IO复用/#more" class="more-link">Read More</a>
+          </div>
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
   <article class="post">
   
   <div class="post-content">
@@ -291,6 +328,8 @@
   
     <li><a href="/tags/其他/">其他</a><small>1</small></li>
   
+    <li><a href="/tags/网络编程/">网络编程</a><small>1</small></li>
+  
   </ul>
 </div>
 
@@ -299,7 +338,7 @@
   </div>
   <footer id="footer" class="inner"><div class="alignleft">
   
-  &copy; 2015 John Doe
+  &copy; 2015 Bytree
   
 </div>
 <div class="clearfix"></div></footer>
