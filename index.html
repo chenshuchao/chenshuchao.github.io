@@ -51,6 +51,43 @@
     <header>
       
         <div class="icon"></div>
+        <time datetime="2016-03-13T04:34:00.000Z"><a href="/2016/03/13/socketio_cpp详解/">2016-03-13</a></time>
+      
+      
+  
+    <h1 class="title"><a href="/2016/03/13/socketio_cpp详解/">socketio_cpp详解</a></h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p><a href="https://github.com/chenshuchao/socketio_cpp">socketio_cpp</a> 是 <a href="https://github.com/socketio/socket.io">socket.io</a> server 端的 C++ 版本，主要代码结构跟 <a href="https://github.com/socketio/socket.io">socket.io</a> 相似，总体由下向上可以分为三层：</p>
+<h2 id="第一层_woody">第一层 woody</h2><p>   这一层主要提供 HTTP 及 WebSocket 服务，可以分为两个部分：一个是由开源网络库 <a href="https://github.com/chenshuo/muduo">muduo</a> 提供的 TCP 服务，另一个是在此之上进行 HTTP 及 WebSocket 的解析和处理。<br>   <a href="https://github.com/chenshuo/muduo">muduo</a> 是一个基于 Reactor 模式的多线程 C++ 网络库。<a href="https://github.com/chenshuo/muduo">muduo</a> 对底层的网络操作进行封装，其中将 socket 连接封装成 TcpConnection，我们只需要为其设置一些事件回调函数即可。<br>主要几个回调函数：</p>
+      
+    </div>
+    <footer>
+      
+        
+          <div class="alignleft">
+            <a href="/2016/03/13/socketio_cpp详解/#more" class="more-link">Read More</a>
+          </div>
+        
+        
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+
+  <article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
         <time datetime="2015-11-29T14:34:00.000Z"><a href="/2015/11/29/IO复用/">2015-11-29</a></time>
       
       
@@ -326,9 +363,13 @@
   
     <li><a href="/tags/Python/">Python</a><small>1</small></li>
   
+    <li><a href="/tags/Web编程/">Web编程</a><small>1</small></li>
+  
     <li><a href="/tags/其他/">其他</a><small>1</small></li>
   
-    <li><a href="/tags/网络编程/">网络编程</a><small>1</small></li>
+    <li><a href="/tags/网络编程/">网络编程</a><small>2</small></li>
+  
+    <li><a href="/tags/网络编程-Web/">网络编程 Web</a><small>0</small></li>
   
   </ul>
 </div>
@@ -338,7 +379,7 @@
   </div>
   <footer id="footer" class="inner"><div class="alignleft">
   
-  &copy; 2015 Bytree
+  &copy; 2016 Bytree
   
 </div>
 <div class="clearfix"></div></footer>
